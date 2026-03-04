@@ -10,6 +10,8 @@ function App() {
     const [inventory, setInventory] = useState<any[]>([])
     const [operators, setOperators] = useState<any[]>([])
     const [attendance, setAttendance] = useState<any[]>([])
+    const [recipes, setRecipes] = useState<any[]>([])
+    const [recipeSupplies, setRecipeSupplies] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [modalType, setModalType] = useState<'garment' | 'inventory' | 'machine' | 'hr'>('garment')
@@ -19,6 +21,7 @@ function App() {
     const [invFormData, setInvFormData] = useState({ nombre: '', stock_actual: 0, unidad: 'Litros', punto_reorden: 5 })
     const [machineForm, setMachineForm] = useState({ nombre: '', tipo: 'LAVADORA', marca: '' })
     const [operatorForm, setOperatorForm] = useState({ nombre: '', rol: 'OPERARIO' })
+    const [recipeForm, setRecipeForm] = useState({ nombre: '', descripcion: '' })
 
     useEffect(() => {
         fetchData()
@@ -32,8 +35,12 @@ function App() {
             supabase.from('lote_trabajo').select('*, maquina(nombre)').is('hora_fin_estimada', null),
             supabase.from('insumo').select('*').order('nombre'),
             supabase.from('operario').select('*').order('nombre'),
-            supabase.from('asistencia').select('*, operario(nombre)').order('entrada', { ascending: false }).limit(10)
+            supabase.from('asistencia').select('*, operario(nombre)').order('entrada', { ascending: false }).limit(10),
+            supabase.from('receta').select('*').order('nombre'),
+            supabase.from('receta_insumo').select('*, insumo(nombre)')
         ])
+
+        const [garmentRes, machineRes, batchRes, invRes, opRes, attRes, recipeRes, supplyRes] = results;
 
         setGarments(garmentRes.data || [])
         setMachines(machineRes.data || [])
@@ -41,6 +48,8 @@ function App() {
         setInventory(invRes.data || [])
         setOperators(opRes.data || [])
         setAttendance(attRes.data || [])
+        setRecipes(recipeRes.data || [])
+        setRecipeSupplies(supplyRes.data || [])
         setLoading(false)
     }
 
@@ -87,8 +96,18 @@ function App() {
         }
     }
 
-    const openModal = (type: 'garment' | 'inventory' | 'machine' | 'hr') => {
-        setModalType(type)
+    const handleRecipeCreate = async (e: React.FormEvent) => {
+        e.preventDefault()
+        const { error } = await supabase.from('receta').insert([recipeForm])
+        if (!error) {
+            setIsModalOpen(false)
+            setRecipeForm({ nombre: '', descripcion: '' })
+            fetchData()
+        }
+    }
+
+    const openModal = (type: 'garment' | 'inventory' | 'machine' | 'hr' | 'recipe') => {
+        setModalType(type as any)
         setIsModalOpen(true)
     }
 
@@ -109,6 +128,7 @@ function App() {
                     <NavItem icon={<Cog size={20} />} label="Máquinas" active={activeTab === 'machines'} onClick={() => setActiveTab('machines')} />
                     <NavItem icon={<BarChart3 size={20} />} label="Reportes / KPIs" active={activeTab === 'reports'} onClick={() => setActiveTab('reports')} />
                     <NavItem icon={<Users size={20} />} label="Personal" active={activeTab === 'hr'} onClick={() => setActiveTab('hr')} />
+                    <NavItem icon={<Activity size={20} />} label="Config. Ciclos" active={activeTab === 'recipes'} onClick={() => setActiveTab('recipes')} />
                     <div style={{ height: '1px', background: 'var(--border)', margin: '1.5rem 0' }} />
                     <NavItem icon={<Settings size={20} />} label="Configuración" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
                 </nav>
@@ -375,6 +395,40 @@ function App() {
                     </div>
                 )}
 
+                {/* --- PESTAÑA CONFIG. CICLOS (RECETAS) --- */}
+                {activeTab === 'recipes' && (
+                    <section className="card">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                            <h3 style={{ margin: 0 }}>Ciclos de Lavado (Recetas)</h3>
+                            <button onClick={() => openModal('recipe')} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <Plus size={20} /> Nuevo Ciclo
+                            </button>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1.5rem' }}>
+                            {recipes.map(r => (
+                                <div key={r.id} className="card" style={{ border: '1px solid var(--border)', padding: '1.25rem' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '1rem' }}>
+                                        <div>
+                                            <h4 style={{ margin: 0, color: 'var(--primary)' }}>{r.nombre}</h4>
+                                            <p style={{ margin: '0.25rem 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{r.descripcion}</p>
+                                        </div>
+                                    </div>
+                                    <div style={{ background: 'rgba(255,255,255,0.02)', borderRadius: '8px', padding: '0.75rem' }}>
+                                        <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>Insumos por Lote:</div>
+                                        {recipeSupplies.filter(rs => rs.receta_id === r.id).map(rs => (
+                                            <div key={rs.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', padding: '0.25rem 0' }}>
+                                                <span>{rs.insumo?.nombre}</span>
+                                                <span style={{ fontWeight: 600 }}>{rs.cantidad_ml_por_lote} ml</span>
+                                            </div>
+                                        ))}
+                                        {recipeSupplies.filter(rs => rs.receta_id === r.id).length === 0 && <div style={{ fontSize: '0.8rem', fontStyle: 'italic', color: 'var(--text-muted)' }}>Sin insumos vinculados.</div>}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
+
                 {/* --- MODAL UNIFICADO --- */}
                 {isModalOpen && (
                     <div className="modal-overlay">
@@ -444,6 +498,20 @@ function App() {
                                     <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
                                         <button type="button" onClick={() => setIsModalOpen(false)} style={{ background: '#475569', color: '#fff', flex: 1 }}>Cancelar</button>
                                         <button type="submit" style={{ flex: 1 }}>Guardar</button>
+                                    </div>
+                                </form>
+                            )}
+
+                            {modalType === 'recipe' && (
+                                <form onSubmit={handleRecipeCreate}>
+                                    <div className="form-group"><label>Nombre del Ciclo</label><input type="text" required value={recipeForm.nombre} onChange={e => setRecipeForm({ ...recipeForm, nombre: e.target.value })} placeholder="Ej: Ciclo Blancos Premium" /></div>
+                                    <div className="form-group"><label>Descripción</label><input type="text" value={recipeForm.descripcion} onChange={e => setRecipeForm({ ...recipeForm, descripcion: e.target.value })} placeholder="Breve nota sobre el uso" /></div>
+                                    <div style={{ background: '#ef444410', border: '1px solid #ef444430', padding: '0.75rem', borderRadius: '8px', marginBottom: '1rem' }}>
+                                        <p style={{ margin: 0, fontSize: '0.75rem', color: '#ef4444' }}><strong>Nota:</strong> Una vez creado el ciclo, podrás vincular los insumos desde la base de datos o en la próxima actualización del panel.</p>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+                                        <button type="button" onClick={() => setIsModalOpen(false)} style={{ background: '#475569', color: '#fff', flex: 1 }}>Cancelar</button>
+                                        <button type="submit" style={{ flex: 1 }}>Crear Ciclo</button>
                                     </div>
                                 </form>
                             )}
