@@ -8,6 +8,8 @@ function App() {
     const [machines, setMachines] = useState<any[]>([])
     const [batches, setBatches] = useState<any[]>([])
     const [inventory, setInventory] = useState<any[]>([])
+    const [operators, setOperators] = useState<any[]>([])
+    const [attendance, setAttendance] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [modalType, setModalType] = useState<'garment' | 'inventory' | 'machine' | 'hr'>('garment')
@@ -16,6 +18,7 @@ function App() {
     const [garmentForm, setGarmentForm] = useState({ nombre: '', requiere_planchado: true, tiempo_estandar_min: 15 })
     const [invFormData, setInvFormData] = useState({ nombre: '', stock_actual: 0, unidad: 'Litros', punto_reorden: 5 })
     const [machineForm, setMachineForm] = useState({ nombre: '', tipo: 'LAVADORA', marca: '' })
+    const [operatorForm, setOperatorForm] = useState({ nombre: '', rol: 'OPERARIO' })
 
     useEffect(() => {
         fetchData()
@@ -23,17 +26,21 @@ function App() {
 
     const fetchData = async () => {
         setLoading(true)
-        const [garmentRes, machineRes, batchRes, invRes] = await Promise.all([
+        const [garmentRes, machineRes, batchRes, invRes, opRes, attRes] = await Promise.all([
             supabase.from('tipo_prenda').select('*').order('nombre'),
             supabase.from('maquina').select('*').eq('activo', true).order('nombre'),
             supabase.from('lote_trabajo').select('*, maquina(nombre)').is('hora_fin_estimada', null),
-            supabase.from('insumo').select('*').order('nombre')
+            supabase.from('insumo').select('*').order('nombre'),
+            supabase.from('operario').select('*').order('nombre'),
+            supabase.from('asistencia').select('*, operario(nombre)').order('entrada', { ascending: false }).limit(10)
         ])
 
         setGarments(garmentRes.data || [])
         setMachines(machineRes.data || [])
         setBatches(batchRes.data || [])
         setInventory(invRes.data || [])
+        setOperators(opRes.data || [])
+        setAttendance(attRes.data || [])
         setLoading(false)
     }
 
@@ -63,6 +70,19 @@ function App() {
         if (!error) {
             setIsModalOpen(false)
             setMachineForm({ nombre: '', tipo: 'LAVADORA', marca: '' })
+            fetchData()
+        }
+    }
+
+    const handleOperatorCreate = async (e: React.FormEvent) => {
+        e.preventDefault()
+        const { error } = await supabase.from('operario').insert([{
+            nombre: operatorForm.nombre,
+            rol: operatorForm.rol
+        }])
+        if (!error) {
+            setIsModalOpen(false)
+            setOperatorForm({ nombre: '', rol: 'OPERARIO' })
             fetchData()
         }
     }
@@ -266,6 +286,64 @@ function App() {
                     </section>
                 )}
 
+                {/* --- PESTAÑA PERSONAL (HR) --- */}
+                {activeTab === 'hr' && (
+                    <div style={{ display: 'grid', gap: '2rem', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)' }}>
+                        <section className="card">
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                                <h3 style={{ margin: 0 }}>Nómina de Operarios</h3>
+                                <button onClick={() => openModal('hr')} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <Plus size={20} /> Nuevo Operario
+                                </button>
+                            </div>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                <thead>
+                                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                                        <th style={{ padding: '1rem', color: 'var(--text-muted)' }}>Nombre</th>
+                                        <th style={{ padding: '1rem', color: 'var(--text-muted)' }}>Rol</th>
+                                        <th style={{ padding: '1rem', color: 'var(--text-muted)' }}>ID</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {operators.map(op => (
+                                        <tr key={op.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                                            <td style={{ padding: '1rem', fontWeight: 600 }}>{op.nombre}</td>
+                                            <td style={{ padding: '1rem' }}>
+                                                <span style={{ padding: '0.25rem 0.75rem', borderRadius: '2rem', background: '#3b82f620', color: '#3b82f6', fontSize: '0.875rem', fontWeight: 600 }}>
+                                                    {op.rol}
+                                                </span>
+                                            </td>
+                                            <td style={{ padding: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{op.id.slice(0, 8)}...</td>
+                                        </tr>
+                                    ))}
+                                    {operators.length === 0 && <tr><td colSpan={3} style={{ padding: '2rem', textAlign: 'center' }}>No hay personal registrado.</td></tr>}
+                                </tbody>
+                            </table>
+                        </section>
+
+                        <section className="card">
+                            <h3 style={{ marginBottom: '1.5rem' }}>Asistencia Reciente</h3>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                {attendance.map(att => (
+                                    <div key={att.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem', border: '1px solid var(--border)', borderRadius: '0.75rem' }}>
+                                        <div style={{ background: att.salida ? '#64748b20' : '#2dd4bf20', padding: '0.5rem', borderRadius: '50%' }}>
+                                            <Clock size={16} color={att.salida ? '#64748b' : '#2dd4bf'} />
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{att.operario?.nombre}</div>
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                                {new Date(att.entrada).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                {att.salida ? ` - ${new Date(att.salida).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ' (Activo)'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                                {attendance.length === 0 && <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.875rem' }}>Sin registros hoy.</div>}
+                            </div>
+                        </section>
+                    </div>
+                )}
+
                 {/* --- PESTAÑA REPORTES --- */}
                 {activeTab === 'reports' && (
                     <div style={{ display: 'grid', gap: '2rem', gridTemplateColumns: '1fr 1fr' }}>
@@ -327,6 +405,23 @@ function App() {
                                             <option value="LAVADORA">Lavadora</option>
                                             <option value="SECADORA">Secadora</option>
                                             <option value="PLANCHA">Plancha</option>
+                                        </select>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+                                        <button type="button" onClick={() => setIsModalOpen(false)} style={{ background: '#475569', color: '#fff', flex: 1 }}>Cancelar</button>
+                                        <button type="submit" style={{ flex: 1 }}>Guardar</button>
+                                    </div>
+                                </form>
+                            )}
+
+                            {modalType === 'hr' && (
+                                <form onSubmit={handleOperatorCreate}>
+                                    <div className="form-group"><label>Nombre Completo</label><input type="text" required value={operatorForm.nombre} onChange={e => setOperatorForm({ ...operatorForm, nombre: e.target.value })} /></div>
+                                    <div className="form-group"><label>Rol</label>
+                                        <select value={operatorForm.rol} onChange={e => setOperatorForm({ ...operatorForm, rol: e.target.value })} style={{ background: '#0f172a', border: '1px solid var(--border)', padding: '0.75rem', color: 'white', borderRadius: '0.5rem' }}>
+                                            <option value="OPERARIO">Operario</option>
+                                            <option value="SUPERVISOR">Supervisor</option>
+                                            <option value="ADMIN">Administrador</option>
                                         </select>
                                     </div>
                                     <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
