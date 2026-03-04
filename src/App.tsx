@@ -10,14 +10,12 @@ function App() {
     const [inventory, setInventory] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [isModalOpen, setIsModalOpen] = useState(false)
+    const [modalType, setModalType] = useState<'garment' | 'inventory' | 'machine' | 'hr'>('garment')
 
-    // Form state for inventory
-    const [invFormData, setInvFormData] = useState({
-        nombre: '',
-        stock_actual: 0,
-        unidad: 'Litros',
-        punto_reorden: 5
-    })
+    // Form states
+    const [garmentForm, setGarmentForm] = useState({ nombre: '', requiere_planchado: true, tiempo_estandar_min: 15 })
+    const [invFormData, setInvFormData] = useState({ nombre: '', stock_actual: 0, unidad: 'Litros', punto_reorden: 5 })
+    const [machineForm, setMachineForm] = useState({ nombre: '', tipo: 'LAVADORA', marca: '' })
 
     useEffect(() => {
         fetchData()
@@ -27,7 +25,7 @@ function App() {
         setLoading(true)
         const [garmentRes, machineRes, batchRes, invRes] = await Promise.all([
             supabase.from('tipo_prenda').select('*').order('nombre'),
-            supabase.from('maquina').select('*').eq('activo', true),
+            supabase.from('maquina').select('*').eq('activo', true).order('nombre'),
             supabase.from('lote_trabajo').select('*, maquina(nombre)').is('hora_fin_estimada', null),
             supabase.from('insumo').select('*').order('nombre')
         ])
@@ -39,6 +37,16 @@ function App() {
         setLoading(false)
     }
 
+    const handleCreateGarment = async (e: React.FormEvent) => {
+        e.preventDefault()
+        const { error } = await supabase.from('tipo_prenda').insert([garmentForm])
+        if (!error) {
+            setIsModalOpen(false)
+            setGarmentForm({ nombre: '', requiere_planchado: true, tiempo_estandar_min: 15 })
+            fetchData()
+        }
+    }
+
     const handleInvCreate = async (e: React.FormEvent) => {
         e.preventDefault()
         const { error } = await supabase.from('insumo').insert([invFormData])
@@ -47,6 +55,21 @@ function App() {
             setInvFormData({ nombre: '', stock_actual: 0, unidad: 'Litros', punto_reorden: 5 })
             fetchData()
         }
+    }
+
+    const handleMachineCreate = async (e: React.FormEvent) => {
+        e.preventDefault()
+        const { error } = await supabase.from('maquina').insert([machineForm])
+        if (!error) {
+            setIsModalOpen(false)
+            setMachineForm({ nombre: '', tipo: 'LAVADORA', marca: '' })
+            fetchData()
+        }
+    }
+
+    const openModal = (type: 'garment' | 'inventory' | 'machine' | 'hr') => {
+        setModalType(type)
+        setIsModalOpen(true)
     }
 
     return (
@@ -78,13 +101,17 @@ function App() {
                             {activeTab === 'dash' ? 'Panel de Supervisión (Gantt)' :
                                 activeTab === 'master' ? 'Configuración de Prendas' :
                                     activeTab === 'inventory' ? 'Control de Insumos / Químicos' :
-                                        activeTab === 'reports' ? 'Reportes y Eficiencia' : 'Panel de Control'}
+                                        activeTab === 'machines' ? 'Gestión de Maquinaria' :
+                                            activeTab === 'hr' ? 'Gestión de Personal' :
+                                                activeTab === 'reports' ? 'Reportes y Eficiencia' : 'Panel de Control'}
                         </h1>
                         <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem' }}>
                             {activeTab === 'dash' ? 'Monitorea el uso de máquinas y flujo de lotes.' :
                                 activeTab === 'master' ? 'Administra tipos de prendas y tiempos.' :
                                     activeTab === 'inventory' ? 'Stock de jabón, suavizante y químicos.' :
-                                        activeTab === 'reports' ? 'Métricas de producción y eficiencia.' : 'Selecciona una sección.'}
+                                        activeTab === 'machines' ? 'Configura lavadoras y secadoras de la planta.' :
+                                            activeTab === 'hr' ? 'Control de operarios y asistencia.' :
+                                                activeTab === 'reports' ? 'Métricas de producción y eficiencia.' : 'Selecciona una sección.'}
                         </p>
                     </div>
                     <button onClick={fetchData} style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-main)', padding: '0.75rem' }}>
@@ -92,66 +119,7 @@ function App() {
                     </button>
                 </header>
 
-                {activeTab === 'inventory' && (
-                    <div style={{ display: 'grid', gap: '1.5rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                            <button onClick={() => setIsModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <Plus size={20} /> Nuevo Insumo
-                            </button>
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
-                            {inventory.map(item => (
-                                <div key={item.id} className="card inventory-card">
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                            <div style={{ background: item.stock_actual <= item.punto_reorden ? '#ef444420' : '#2dd4bf20', padding: '0.50rem', borderRadius: '8px' }}>
-                                                <Droplets color={item.stock_actual <= item.punto_reorden ? '#ef4444' : '#2dd4bf'} size={24} />
-                                            </div>
-                                            <div>
-                                                <h4 style={{ margin: 0, fontSize: '1.1rem' }}>{item.nombre}</h4>
-                                                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{item.id} #ID</span>
-                                            </div>
-                                        </div>
-                                        {item.stock_actual <= item.punto_reorden && (
-                                            <span className="badge-danger">Stock Bajo</span>
-                                        )}
-                                    </div>
-
-                                    <div style={{ marginTop: '1.5rem' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', marginBottom: '0.5rem' }}>
-                                            <span color="var(--text-muted)">Nivel Actual</span>
-                                            <span style={{ fontWeight: 700 }}>{item.stock_actual} {item.unidad}</span>
-                                        </div>
-                                        <div className="progress-bg">
-                                            {/* Simulación visual de nivel (máx 100 para demo) */}
-                                            <div className="progress-fill" style={{
-                                                width: `${Math.min((item.stock_actual / 20) * 100, 100)}%`,
-                                                background: item.stock_actual <= item.punto_reorden ? '#ef4444' : 'var(--primary)'
-                                            }} />
-                                        </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginTop: '0.5rem', color: 'var(--text-muted)' }}>
-                                            <span>Mínimo: {item.punto_reorden} {item.unidad}</span>
-                                            <span>Capacidad: 20 {item.unidad}</span>
-                                        </div>
-                                    </div>
-
-                                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem' }}>
-                                        <button style={{ flex: 1, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-main)', fontSize: '0.8rem' }}>
-                                            Editar
-                                        </button>
-                                        <button style={{ flex: 1, background: '#3b82f620', color: '#3b82f6', border: 'none', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                                            <Plus size={16} /> Reponer
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                            {inventory.length === 0 && <div className="card" style={{ gridColumn: '1/-1', textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>No hay insumos registrados.</div>}
-                        </div>
-                    </div>
-                )}
-
-                {/* Mantenemos las otras pestañas para consistencia */}
+                {/* --- PESTAÑA DASHBOARD --- */}
                 {activeTab === 'dash' && (
                     <div style={{ display: 'grid', gap: '1.5rem' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem' }}>
@@ -163,13 +131,142 @@ function App() {
                         <section className="card">
                             <h3 style={{ marginBottom: '1.5rem' }}>Ocupación de Máquinas (Hoy)</h3>
                             <div className="gantt-container">
-                                {/* Gantt logic already provided */}
-                                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando línea de tiempo...</div>
+                                {machines.length === 0 ? (
+                                    <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No hay máquinas activas.</div>
+                                ) : (
+                                    <>
+                                        <div className="gantt-header">
+                                            <div className="gantt-y-label">Máquina</div>
+                                            <div className="gantt-timeline">
+                                                <span>08:00</span><span>10:00</span><span>12:00</span><span>14:00</span><span>16:00</span><span>18:00</span>
+                                            </div>
+                                        </div>
+                                        {machines.map(m => (
+                                            <div key={m.id} className="gantt-row">
+                                                <div className="gantt-machine-info">
+                                                    <span style={{ fontWeight: 600 }}>{m.nombre}</span>
+                                                    <small style={{ color: 'var(--text-muted)' }}>{m.tipo}</small>
+                                                </div>
+                                                <div className="gantt-track">
+                                                    {batches.filter(b => b.maquina_id === m.id).map((b, i) => (
+                                                        <div key={i} className="gantt-bar" style={{ left: '20%', width: '30%' }}>
+                                                            {b.tipo_lote} ({b.peso_real}kg)
+                                                        </div>
+                                                    ))}
+                                                    <div className="gantt-bar busy" style={{ left: '60%', width: '15%' }}>Simulación</div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </>
+                                )}
                             </div>
                         </section>
                     </div>
                 )}
 
+                {/* --- PESTAÑA PRENDAS (MASTER) --- */}
+                {activeTab === 'master' && (
+                    <section className="card">
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
+                            <button onClick={() => openModal('garment')} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <Plus size={20} /> Nueva Prenda
+                            </button>
+                        </div>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                            <thead>
+                                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                                    <th style={{ padding: '1rem', color: 'var(--text-muted)' }}>Nombre Prenda</th>
+                                    <th style={{ padding: '1rem', color: 'var(--text-muted)' }}>Requiere Planchado</th>
+                                    <th style={{ padding: '1rem', color: 'var(--text-muted)' }}>Tiempo Estándar</th>
+                                    <th style={{ padding: '1rem', color: 'var(--text-muted)' }}>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {garments.map(g => (
+                                    <tr key={g.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                                        <td style={{ padding: '1rem', fontWeight: 600 }}>{g.nombre}</td>
+                                        <td style={{ padding: '1rem' }}>
+                                            <span style={{ padding: '0.25rem 0.75rem', borderRadius: '2rem', background: g.requiere_planchado ? '#2dd4bf20' : '#64748b20', color: g.requiere_planchado ? 'var(--primary)' : 'var(--text-muted)', fontSize: '0.875rem', fontWeight: 600 }}>
+                                                {g.requiere_planchado ? 'Sí' : 'No'}
+                                            </span>
+                                        </td>
+                                        <td style={{ padding: '1rem' }}>{g.tiempo_estandar_min} min</td>
+                                        <td style={{ padding: '1rem' }}>
+                                            <button style={{ padding: '0.4rem', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)' }}>
+                                                <Settings size={16} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {garments.length === 0 && <tr><td colSpan={4} style={{ padding: '2rem', textAlign: 'center' }}>No hay prendas.</td></tr>}
+                            </tbody>
+                        </table>
+                    </section>
+                )}
+
+                {/* --- PESTAÑA INVENTARIO --- */}
+                {activeTab === 'inventory' && (
+                    <div style={{ display: 'grid', gap: '1.5rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                            <button onClick={() => openModal('inventory')} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <Plus size={20} /> Nuevo Insumo
+                            </button>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
+                            {inventory.map(item => (
+                                <div key={item.id} className="card inventory-card">
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                            <div style={{ background: item.stock_actual <= item.punto_reorden ? '#ef444420' : '#2dd4bf20', padding: '0.50rem', borderRadius: '8px' }}>
+                                                <Droplets color={item.stock_actual <= item.punto_reorden ? '#ef4444' : '#2dd4bf'} size={24} />
+                                            </div>
+                                            <div>
+                                                <h4 style={{ margin: 0, fontSize: '1.1rem' }}>{item.nombre}</h4>
+                                                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{item.unidad}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style={{ marginTop: '1.5rem' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', marginBottom: '0.5rem' }}>
+                                            <span>Stock</span>
+                                            <span style={{ fontWeight: 700 }}>{item.stock_actual} / {item.punto_reorden} (min)</span>
+                                        </div>
+                                        <div className="progress-bg">
+                                            <div className="progress-fill" style={{
+                                                width: `${Math.min((item.stock_actual / Math.max(item.stock_actual, item.punto_reorden * 2)) * 100, 100)}%`,
+                                                background: item.stock_actual <= item.punto_reorden ? '#ef4444' : 'var(--primary)'
+                                            }} />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* --- PESTAÑA MÁQUINAS --- */}
+                {activeTab === 'machines' && (
+                    <section className="card">
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
+                            <button onClick={() => openModal('machine')} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <Plus size={20} /> Nueva Máquina
+                            </button>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
+                            {machines.map(m => (
+                                <div key={m.id} className="card" style={{ padding: '1rem', border: '1px solid var(--border)' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                        <Cog color="var(--primary)" size={20} />
+                                        <span style={{ fontWeight: 700 }}>{m.nombre}</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{m.tipo} - {m.marca || 'Genérica'}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
+
+                {/* --- PESTAÑA REPORTES --- */}
                 {activeTab === 'reports' && (
                     <div style={{ display: 'grid', gap: '2rem', gridTemplateColumns: '1fr 1fr' }}>
                         <section className="card">
@@ -185,21 +282,59 @@ function App() {
                     </div>
                 )}
 
-                {/* MODAL NUEVO INSUMO */}
-                {isModalOpen && activeTab === 'inventory' && (
+                {/* --- MODAL UNIFICADO --- */}
+                {isModalOpen && (
                     <div className="modal-overlay">
                         <div className="modal-card card">
-                            <h2 style={{ marginBottom: '1.5rem' }}>Agregar Nuevo Insumo</h2>
-                            <form onSubmit={handleInvCreate}>
-                                <div className="form-group"><label>Nombre del Químico</label><input type="text" required value={invFormData.nombre} onChange={e => setInvFormData({ ...invFormData, nombre: e.target.value })} /></div>
-                                <div className="form-group"><label>Stock Inicial</label><input type="number" required value={invFormData.stock_actual} onChange={e => setInvFormData({ ...invFormData, stock_actual: parseFloat(e.target.value) })} /></div>
-                                <div className="form-group"><label>Unidad (Lts, Kgs, etc)</label><input type="text" required value={invFormData.unidad} onChange={e => setInvFormData({ ...invFormData, unidad: e.target.value })} /></div>
-                                <div className="form-group"><label>Punto de Reorden (Alerta)</label><input type="number" required value={invFormData.punto_reorden} onChange={e => setInvFormData({ ...invFormData, punto_reorden: parseFloat(e.target.value) })} /></div>
-                                <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
-                                    <button type="button" onClick={() => setIsModalOpen(false)} style={{ background: '#334155', color: '#fff', flex: 1 }}>Cancelar</button>
-                                    <button type="submit" style={{ flex: 1 }}>Guardar Insumo</button>
-                                </div>
-                            </form>
+                            <h2 style={{ marginBottom: '1.5rem' }}>
+                                {modalType === 'garment' ? 'Nueva Prenda' :
+                                    modalType === 'inventory' ? 'Nuevo Insumo' :
+                                        modalType === 'machine' ? 'Nueva Máquina' : 'Nuevo Registro'}
+                            </h2>
+
+                            {modalType === 'garment' && (
+                                <form onSubmit={handleCreateGarment}>
+                                    <div className="form-group"><label>Nombre</label><input type="text" required value={garmentForm.nombre} onChange={e => setGarmentForm({ ...garmentForm, nombre: e.target.value })} /></div>
+                                    <div className="form-group"><label>Tiempo (min)</label><input type="number" required value={garmentForm.tiempo_estandar_min} onChange={e => setGarmentForm({ ...garmentForm, tiempo_estandar_min: parseInt(e.target.value) })} /></div>
+                                    <div className="form-group" style={{ flexDirection: 'row', gap: '1rem', alignItems: 'center' }}>
+                                        <input type="checkbox" checked={garmentForm.requiere_planchado} onChange={e => setGarmentForm({ ...garmentForm, requiere_planchado: e.target.checked })} id="iron-c" />
+                                        <label htmlFor="iron-c" style={{ marginBottom: 0 }}>¿Planchado?</label>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+                                        <button type="button" onClick={() => setIsModalOpen(false)} style={{ background: '#475569', color: '#fff', flex: 1 }}>Cancelar</button>
+                                        <button type="submit" style={{ flex: 1 }}>Guardar</button>
+                                    </div>
+                                </form>
+                            )}
+
+                            {modalType === 'inventory' && (
+                                <form onSubmit={handleInvCreate}>
+                                    <div className="form-group"><label>Nombre</label><input type="text" required value={invFormData.nombre} onChange={e => setInvFormData({ ...invFormData, nombre: e.target.value })} /></div>
+                                    <div className="form-group"><label>Stock</label><input type="number" required value={invFormData.stock_actual} onChange={e => setInvFormData({ ...invFormData, stock_actual: parseFloat(e.target.value) })} /></div>
+                                    <div className="form-group"><label>Unidad</label><input type="text" required value={invFormData.unidad} onChange={e => setInvFormData({ ...invFormData, unidad: e.target.value })} /></div>
+                                    <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+                                        <button type="button" onClick={() => setIsModalOpen(false)} style={{ background: '#475569', color: '#fff', flex: 1 }}>Cancelar</button>
+                                        <button type="submit" style={{ flex: 1 }}>Guardar</button>
+                                    </div>
+                                </form>
+                            )}
+
+                            {modalType === 'machine' && (
+                                <form onSubmit={handleMachineCreate}>
+                                    <div className="form-group"><label>Nombre</label><input type="text" required value={machineForm.nombre} onChange={e => setMachineForm({ ...machineForm, nombre: e.target.value })} /></div>
+                                    <div className="form-group"><label>Tipo</label>
+                                        <select value={machineForm.tipo} onChange={e => setMachineForm({ ...machineForm, tipo: e.target.value })} style={{ background: '#0f172a', border: '1px solid var(--border)', padding: '0.75rem', color: 'white', borderRadius: '0.5rem' }}>
+                                            <option value="LAVADORA">Lavadora</option>
+                                            <option value="SECADORA">Secadora</option>
+                                            <option value="PLANCHA">Plancha</option>
+                                        </select>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+                                        <button type="button" onClick={() => setIsModalOpen(false)} style={{ background: '#475569', color: '#fff', flex: 1 }}>Cancelar</button>
+                                        <button type="submit" style={{ flex: 1 }}>Guardar</button>
+                                    </div>
+                                </form>
+                            )}
                         </div>
                     </div>
                 )}
@@ -213,6 +348,14 @@ function App() {
         .inventory-card { transition: all 0.3s ease; border: 1px solid var(--border); }
         .inventory-card:hover { border-color: var(--primary); }
         .gantt-container { overflow-x: auto; margin-top: 1rem; }
+        .gantt-header { display: flex; border-bottom: 2px solid var(--border); padding-bottom: 1rem; }
+        .gantt-y-label { width: 180px; font-weight: bold; color: var(--text-muted); }
+        .gantt-timeline { flex: 1; display: flex; justify-content: space-between; padding: 0 1rem; color: var(--text-muted); font-size: 0.8rem; }
+        .gantt-row { display: flex; padding: 1rem 0; border-bottom: 1px solid var(--border); align-items: center; }
+        .gantt-machine-info { width: 180px; display: flex; flex-direction: column; }
+        .gantt-track { flex: 1; height: 32px; background: rgba(255,255,255,0.03); border-radius: 4px; position: relative; overflow: hidden; margin: 0 1rem; }
+        .gantt-bar { position: absolute; height: 100%; background: var(--primary); color: #111; font-size: 0.65rem; font-weight: bold; display: flex; align-items: center; padding: 0 8px; border-radius: 4px; }
+        .gantt-bar.busy { background: #64748b; color: white; opacity: 0.5; }
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
         .modal-card { width: 400px; }
         .form-group { display: flex; flex-direction: column; margin-bottom: 1rem; }
