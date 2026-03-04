@@ -309,7 +309,22 @@ function App() {
                                         <tr key={op.id} style={{ borderBottom: '1px solid var(--border)' }}>
                                             <td style={{ padding: '1rem', fontWeight: 600 }}>{op.nombre}</td>
                                             <td style={{ padding: '1rem' }}>
-                                                <span style={{ padding: '0.25rem 0.75rem', borderRadius: '2rem', background: '#3b82f620', color: '#3b82f6', fontSize: '0.875rem', fontWeight: 600 }}>
+                                                <span style={{
+                                                    padding: '0.25rem 0.75rem',
+                                                    borderRadius: '2rem',
+                                                    background:
+                                                        op.rol === 'Lavado / Secado' ? '#2dd4bf20' :
+                                                            op.rol === 'Planchado' ? '#f59e0b20' :
+                                                                op.rol === 'Control de Calidad' ? '#6366f120' :
+                                                                    op.rol === 'Doblado' ? '#f43f5e20' : '#3b82f620',
+                                                    color:
+                                                        op.rol === 'Lavado / Secado' ? '#2dd4bf' :
+                                                            op.rol === 'Planchado' ? '#f59e0b' :
+                                                                op.rol === 'Control de Calidad' ? '#6366f1' :
+                                                                    op.rol === 'Doblado' ? '#f43f5e' : '#3b82f6',
+                                                    fontSize: '0.875rem',
+                                                    fontWeight: 600
+                                                }}>
                                                     {op.rol}
                                                 </span>
                                             </td>
@@ -419,8 +434,10 @@ function App() {
                                     <div className="form-group"><label>Nombre Completo</label><input type="text" required value={operatorForm.nombre} onChange={e => setOperatorForm({ ...operatorForm, nombre: e.target.value })} /></div>
                                     <div className="form-group"><label>Rol</label>
                                         <select value={operatorForm.rol} onChange={e => setOperatorForm({ ...operatorForm, rol: e.target.value })} style={{ background: '#0f172a', border: '1px solid var(--border)', padding: '0.75rem', color: 'white', borderRadius: '0.5rem' }}>
-                                            <option value="OPERARIO">Operario</option>
-                                            <option value="SUPERVISOR">Supervisor</option>
+                                            <option value="Lavado / Secado">Lavado / Secado</option>
+                                            <option value="Planchado">Planchado</option>
+                                            <option value="Control de Calidad">Control de Calidad</option>
+                                            <option value="Doblado">Doblado</option>
                                             <option value="ADMIN">Administrador</option>
                                         </select>
                                     </div>
